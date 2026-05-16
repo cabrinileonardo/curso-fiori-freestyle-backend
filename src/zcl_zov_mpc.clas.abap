@@ -6,10 +6,10 @@ class ZCL_ZOV_MPC definition
 public section.
 
   types:
-    begin of TS_ZFI_ATUALIZA_STATUS,
-        ID_ORDEMID type I,
-        ID_STATUS type C length 1,
-    end of TS_ZFI_ATUALIZA_STATUS .
+    begin of MENSSAGEM2,
+        TIPO type C length 1,
+        MENSSAGEM type string,
+    end of MENSSAGEM2 .
   types:
    begin of ts_text_element,
       artifact_name  type c length 40,       " technical name
@@ -20,6 +20,11 @@ public section.
    end of ts_text_element .
   types:
          tt_text_elements type standard table of ts_text_element with key text_symbol .
+  types:
+    begin of TS_ZFI_ATUALIZA_STATUS,
+        ID_ORDEMID type I,
+        ID_STATUS type C length 1,
+    end of TS_ZFI_ATUALIZA_STATUS .
   types:
   begin of TS_OVCAB,
      ORDEMID type I,
@@ -67,6 +72,7 @@ TT_OVITEM type standard table of TS_OVITEM .
 TT_MENSSAGEM type standard table of TS_MENSSAGEM .
 
   constants GC_MENSSAGEM type /IWBEP/IF_MGW_MED_ODATA_TYPES=>TY_E_MED_ENTITY_NAME value 'Menssagem' ##NO_TEXT.
+  constants GC_MENSSAGEM2 type /IWBEP/IF_MGW_MED_ODATA_TYPES=>TY_E_MED_ENTITY_NAME value 'Menssagem2' ##NO_TEXT.
   constants GC_OVCAB type /IWBEP/IF_MGW_MED_ODATA_TYPES=>TY_E_MED_ENTITY_NAME value 'OvCab' ##NO_TEXT.
   constants GC_OVITEM type /IWBEP/IF_MGW_MED_ODATA_TYPES=>TY_E_MED_ENTITY_NAME value 'OvItem' ##NO_TEXT.
 
@@ -86,6 +92,9 @@ private section.
 
   constants GC_INCL_NAME type STRING value 'ZCL_ZOV_MPC===================CP' ##NO_TEXT.
 
+  methods DEFINE_COMPLEXTYPES
+    raising
+      /IWBEP/CX_MGW_MED_EXCEPTION .
   methods DEFINE_OVCAB
     raising
       /IWBEP/CX_MGW_MED_EXCEPTION .
@@ -119,6 +128,7 @@ CLASS ZCL_ZOV_MPC IMPLEMENTATION.
 
 model->set_schema_namespace( 'ZOV_SRV' ).
 
+define_complextypes( ).
 define_ovcab( ).
 define_ovitem( ).
 define_menssagem( ).
@@ -146,8 +156,8 @@ lo_parameter      type ref to /iwbep/if_mgw_odata_parameter.              "#EC N
 ***********************************************************************************************************************************
 
 lo_action = model->create_action( 'ZFI_ATUALIZA_STATUS' ).  "#EC NOTEXT
-*Set return entity type
-lo_action->set_return_entity_type( 'Menssagem' ). "#EC NOTEXT
+*Set return complex type
+lo_action->set_return_complex_type( 'Menssagem2' ). "#EC NOTEXT
 * Set return type multiplicity
 lo_action->set_return_multiplicity( 'M' ). "#EC NOTEXT
 ***********************************************************************************************************************************
@@ -212,6 +222,48 @@ lo_entity_type = model->get_entity_type( iv_entity_name = 'OvCab' ). "#EC NOTEXT
 lo_nav_property = lo_entity_type->create_navigation_property( iv_property_name  = 'toOVItem' "#EC NOTEXT
                                                               iv_abap_fieldname = 'TOOVITEM' "#EC NOTEXT
                                                               iv_association_name = 'CabItem' ). "#EC NOTEXT
+  endmethod.
+
+
+  method DEFINE_COMPLEXTYPES.
+*&---------------------------------------------------------------------*
+*&           Generated code for the MODEL PROVIDER BASE CLASS         &*
+*&                                                                     &*
+*&  !!!NEVER MODIFY THIS CLASS. IN CASE YOU WANT TO CHANGE THE MODEL  &*
+*&        DO THIS IN THE MODEL PROVIDER SUBCLASS!!!                   &*
+*&                                                                     &*
+*&---------------------------------------------------------------------*
+
+
+ data:
+       lo_annotation     type ref to /iwbep/if_mgw_odata_annotation,             "#EC NEEDED
+       lo_complex_type   type ref to /iwbep/if_mgw_odata_cmplx_type,             "#EC NEEDED
+       lo_property       type ref to /iwbep/if_mgw_odata_property.                "#EC NEEDED
+
+***********************************************************************************************************************************
+*   COMPLEX TYPE - Menssagem2
+***********************************************************************************************************************************
+lo_complex_type = model->create_complex_type( 'Menssagem2' ). "#EC NOTEXT
+
+***********************************************************************************************************************************
+*Properties
+***********************************************************************************************************************************
+lo_property = lo_complex_type->create_property( iv_property_name  = 'Tipo' iv_abap_fieldname = 'TIPO' ). "#EC NOTEXT
+lo_property->set_type_edm_string( ).
+lo_property->set_maxlength( iv_max_length = 1 ).
+lo_property->set_creatable( abap_false ).
+lo_property->set_updatable( abap_false ).
+lo_property->set_sortable( abap_false ).
+lo_property->set_nullable( abap_false ).
+lo_property->set_filterable( abap_false ).
+lo_property = lo_complex_type->create_property( iv_property_name  = 'Menssagem' iv_abap_fieldname = 'MENSSAGEM' ). "#EC NOTEXT
+lo_property->set_type_edm_string( ).
+lo_property->set_creatable( abap_false ).
+lo_property->set_updatable( abap_false ).
+lo_property->set_sortable( abap_false ).
+lo_property->set_nullable( abap_false ).
+lo_property->set_filterable( abap_false ).
+lo_complex_type->bind_structure( iv_structure_name = 'ZCL_ZOV_MPC=>MENSSAGEM2' ). "#EC NOTEXT
   endmethod.
 
 
@@ -760,7 +812,7 @@ lo_entity_set->set_filter_required( abap_false ).
 *&---------------------------------------------------------------------*
 
 
-  CONSTANTS: lc_gen_date_time TYPE timestamp VALUE '20260516150240'.                  "#EC NOTEXT
+  CONSTANTS: lc_gen_date_time TYPE timestamp VALUE '20260516151113'.                  "#EC NOTEXT
   rv_last_modified = super->get_last_modified( ).
   IF rv_last_modified LT lc_gen_date_time.
     rv_last_modified = lc_gen_date_time.
