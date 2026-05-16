@@ -34,7 +34,7 @@ CLASS ZCL_ZOV_MPC_EXT IMPLEMENTATION.
 
     super->define( ).
 
-    lo_entity_type = model->get_entity_type( iv_entity_name = 'OVCab' ).
+    lo_entity_type = model->get_entity_type( iv_entity_name = 'OvCab' ).
     lo_entity_type->bind_structure( iv_structure_name = 'ZCL_ZOV_MPC_EXT=>TY_ORDEM_ITEM' ).
   ENDMETHOD.
 ENDCLASS.

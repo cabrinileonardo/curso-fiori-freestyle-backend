@@ -7,6 +7,8 @@ public section.
 
   methods /IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_DEEP_ENTITY
     redefinition .
+  methods /IWBEP/IF_MGW_APPL_SRV_RUNTIME~EXECUTE_ACTION
+    redefinition .
 protected section.
 
   methods MENSSAGEMSET_CREATE_ENTITY
@@ -47,25 +49,175 @@ ENDCLASS.
 CLASS ZCL_ZOV_DPC_EXT IMPLEMENTATION.
 
 
-  method /IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_DEEP_ENTITY.
-**TRY.
-*CALL METHOD SUPER->/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_DEEP_ENTITY
-*  EXPORTING
-**    iv_entity_name          =
-**    iv_entity_set_name      =
-**    iv_source_name          =
-*    IO_DATA_PROVIDER        =
-**    it_key_tab              =
-**    it_navigation_path      =
-*    IO_EXPAND               =
-**    io_tech_request_context =
-**  IMPORTING
-**    er_deep_entity          =
-*    .
-** CATCH /iwbep/cx_mgw_busi_exception .
-** CATCH /iwbep/cx_mgw_tech_exception .
-**ENDTRY.
-  endmethod.
+  METHOD /iwbep/if_mgw_appl_srv_runtime~create_deep_entity.
+    DATA : ls_deep_entity  TYPE zcl_zov_mpc_ext=>ty_ordem_item.
+    DATA : ls_deep_item    TYPE zcl_zov_mpc_ext=>ts_ovitem.
+
+    DATA : ls_cab          TYPE zovcab.
+    DATA : lt_item         TYPE STANDARD TABLE OF zovitem.
+    DATA : ls_item         TYPE zovitem.
+    DATA : ld_updkz        TYPE char1.
+    DATA : ld_datahora(14) TYPE c.
+
+    DATA(lo_msg) = me->/iwbep/if_mgw_conv_srv_runtime~get_message_container( ).
+
+    CALL METHOD io_data_provider->read_entry_data
+      IMPORTING
+        es_data = ls_deep_entity.
+
+    " cabeçalho
+    IF ls_deep_entity-ordemid = 0.
+      ld_updkz = 'I'.
+
+      MOVE-CORRESPONDING ls_deep_entity TO ls_cab.
+
+      "ls_cab-criacao_data    = sy-datum.
+      "ls_cab-criacao_hora    = sy-uzeit.
+      "ls_cab-criacao_usuario = sy-uname.
+
+      ld_datahora            = ls_deep_entity-datacriacao.
+      ls_cab-criacao_data    = ld_datahora(8).
+      ls_cab-criacao_hora    = ld_datahora+8(6).
+      ls_cab-criacao_usuario = ls_deep_entity-criadopor.
+
+      SELECT SINGLE MAX( ordemid )
+        INTO ls_cab-ordemid
+        FROM zovcab.
+
+      ls_cab-ordemid = ls_cab-ordemid + 1.
+    ELSE.
+      ld_updkz = 'U'.
+
+      " carregando dados atuais
+      SELECT SINGLE *
+        INTO ls_cab
+        FROM zovcab
+       WHERE ordemid = ls_deep_entity-ordemid.
+
+      ls_cab-clienteid  = ls_deep_entity-clienteid.
+      ls_cab-status     = ls_deep_entity-status.
+      ls_cab-totalitens = ls_deep_entity-totalitens.
+      ls_cab-totalfrete = ls_deep_entity-totalfrete.
+      ls_cab-totalordem = ls_cab-totalitens + ls_cab-totalfrete.
+    ENDIF.
+
+    " item
+    LOOP AT ls_deep_entity-toovitem INTO ls_deep_item.
+      MOVE-CORRESPONDING ls_deep_item TO ls_item.
+
+      ls_item-ordemid = ls_cab-ordemid.
+      APPEND ls_item TO lt_item.
+    ENDLOOP.
+
+    " persistência cabeçalho
+    IF ld_updkz = 'I'.
+      INSERT zovcab FROM ls_cab.
+      IF sy-subrc <> 0.
+        ROLLBACK WORK.
+
+        lo_msg->add_message_text_only(
+          EXPORTING
+            iv_msg_type = 'E'
+            iv_msg_text = 'Erro ao inserir ordem'
+        ).
+
+        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+          EXPORTING
+            message_container = lo_msg.
+      ENDIF.
+    ELSE.
+      MODIFY zovcab FROM ls_cab.
+      IF sy-subrc <> 0.
+        ROLLBACK WORK.
+
+        lo_msg->add_message_text_only(
+          EXPORTING
+            iv_msg_type = 'E'
+            iv_msg_text = 'Erro ao atualizar ordem'
+        ).
+
+        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+          EXPORTING
+            message_container = lo_msg.
+      ENDIF.
+    ENDIF.
+
+    " persistência itens
+    DELETE FROM zovitem WHERE ordemid = ls_cab-ordemid.
+    IF lines( lt_item ) > 0.
+      INSERT zovitem FROM TABLE lt_item.
+      IF sy-subrc <> 0.
+        ROLLBACK WORK.
+
+        lo_msg->add_message_text_only(
+          EXPORTING
+            iv_msg_type = 'E'
+            iv_msg_text = 'Erro ao inserir itens'
+        ).
+
+        RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+          EXPORTING
+            message_container = lo_msg.
+      ENDIF.
+    ENDIF.
+
+    COMMIT WORK AND WAIT.
+
+    " atualizando deep entity de retorno
+
+    " cabeçalho
+    ls_deep_entity-ordemid = ls_cab-ordemid.
+    CONVERT DATE ls_cab-criacao_data
+            TIME ls_cab-criacao_hora
+            INTO TIME STAMP ls_deep_entity-datacriacao
+            TIME ZONE 'UTC'. "sy-zonlo.
+
+    " item
+    LOOP AT ls_deep_entity-toovitem ASSIGNING FIELD-SYMBOL(<ls_deep_item>).
+      <ls_deep_item>-ordemid = ls_cab-ordemid.
+    ENDLOOP.
+
+    CALL METHOD me->copy_data_to_ref
+      EXPORTING
+        is_data = ls_deep_entity
+      CHANGING
+        cr_data = er_deep_entity.
+  ENDMETHOD.
+
+
+  METHOD /iwbep/if_mgw_appl_srv_runtime~execute_action.
+    DATA: ld_ordemid  TYPE zovcab-ordemid.
+    DATA: ld_status   TYPE zovcab-status.
+    DATA: lt_bapiret2 TYPE STANDARD TABLE OF zcl_zov_mpc_ext=>ts_menssagem.
+    DATA: ls_bapiret2 TYPE zcl_zov_mpc_ext=>ts_menssagem.
+
+    IF iv_action_name = 'ZFI_ATUALIZA_STATUS'.
+      ld_ordemid = it_parameter[ name = 'ID_ORDEMID' ]-value.
+      ld_status  = it_parameter[ name = 'ID_STATUS' ]-value.
+
+      UPDATE zovcab
+         SET status = ld_status
+       WHERE ordemid = ld_ordemid.
+
+      IF sy-subrc = 0.
+        CLEAR ls_bapiret2.
+        ls_bapiret2-type     = 'S'.
+        ls_bapiret2-message = |Status da ordem { ld_ordemid } atualizado|.
+        APPEND ls_bapiret2 TO lt_bapiret2.
+      ELSE.
+        CLEAR ls_bapiret2.
+        ls_bapiret2-type     = 'E'.
+        ls_bapiret2-message = |Erro ao atualizar status da ordem { ld_ordemid }|.
+        APPEND ls_bapiret2 TO lt_bapiret2.
+      ENDIF.
+    ENDIF.
+
+    CALL METHOD me->copy_data_to_ref
+      EXPORTING
+        is_data = lt_bapiret2
+      CHANGING
+        cr_data = er_data.
+  ENDMETHOD.
 
 
   method MENSSAGEMSET_CREATE_ENTITY.
